@@ -6,8 +6,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Net;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Fabrikam.DroneDelivery.Common;
@@ -16,8 +16,9 @@ using Fabrikam.DroneDelivery.DeliveryService.Services;
 
 namespace Fabrikam.DroneDelivery.DeliveryService.Controllers
 {
+    [ApiController]
     [Route("api/[controller]")]
-    public class DeliveriesController : Controller
+    public class DeliveriesController : ControllerBase
     {
         private readonly IDeliveryRepository deliveryRepository;
         private readonly INotifyMeRequestRepository notifyMeRequestRepository;
@@ -39,16 +40,17 @@ namespace Fabrikam.DroneDelivery.DeliveryService.Controllers
         }
 
         // GET api/deliveries/5
-        [Route("/api/[controller]/{id}", Name = "GetDelivery")]
-        [HttpGet]
-        [ProducesResponseType(typeof(Delivery), 200)]
+        [HttpGet("{id}", Name = "GetDelivery")]
+        [HttpGet("public/{id}")]
+        [ProducesResponseType(typeof(Delivery), StatusCodes.Status200OK)]
         public async Task<IActionResult> Get(string id)
         {
             logger.LogInformation("In Get action with id: {Id}", id);
 
             var internalDelivery = await deliveryRepository.GetAsync(id);
 
-            if (internalDelivery == null) {
+            if (internalDelivery == null)
+            {
                 logger.LogDebug("Delivery id: {Id} not found", id);
                 return NotFound();
             }
@@ -57,9 +59,8 @@ namespace Fabrikam.DroneDelivery.DeliveryService.Controllers
         }
 
         // GET api/deliveries/5/owner
-        [Route("/api/[controller]/{id}/owner")]
-        [HttpGet]
-        [ProducesResponseType(typeof(UserAccount), 200)]
+        [HttpGet("{id}/owner")]
+        [ProducesResponseType(typeof(UserAccount), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetOwner(string id)
         {
             logger.LogInformation("In GetOwner action with id: {Id}", id);
@@ -75,13 +76,12 @@ namespace Fabrikam.DroneDelivery.DeliveryService.Controllers
         }
 
         // GET api/deliveries/5/status
-        [Route("/api/[controller]/{id}/status")]
-        [HttpGet]
-        [ProducesResponseType(typeof(DeliveryStatus), 200)]
+        [HttpGet("{id}/status")]
+        [ProducesResponseType(typeof(DeliveryStatus), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetStatus(string id)
         {
             logger.LogInformation("In GetStatus action with id: {Id}", id);
-            
+
             var delivery = await deliveryRepository.GetAsync(id);
             if (delivery == null)
             {
@@ -89,14 +89,14 @@ namespace Fabrikam.DroneDelivery.DeliveryService.Controllers
                 return NotFound();
             }
 
-            var status = new DeliveryStatus(DeliveryStage.HeadedToDropoff, new Location(0,0,0), DateTime.Now.AddMinutes(10).ToString(), DateTime.Now.AddHours(1).ToString());
+            var status = new DeliveryStatus(DeliveryStage.HeadedToDropoff, new Location(0, 0, 0), DateTime.Now.AddMinutes(10).ToString(), DateTime.Now.AddHours(1).ToString());
             return Ok(status);
         }
 
         // PUT api/deliveries/5
         [HttpPut("{id}")]
-        [ProducesResponseType(typeof(Delivery), 201)]
-        [ProducesResponseType(typeof(void), 204)]
+        [ProducesResponseType(typeof(Delivery), StatusCodes.Status201Created)]
+        [ProducesResponseType(typeof(void), StatusCodes.Status204NoContent)]
         public async Task<IActionResult> Put([FromBody]Delivery delivery, string id)
         {
             logger.LogInformation("In Put action with delivery {Id}: {@DeliveryInfo}", id, delivery.ToLogInfo());
@@ -112,7 +112,7 @@ namespace Fabrikam.DroneDelivery.DeliveryService.Controllers
                 var deliveryTrackingEvent = new DeliveryTrackingEvent { DeliveryId = delivery.Id, Stage = DeliveryStage.Created };
                 await deliveryTrackingRepository.AddAsync(deliveryTrackingEvent);
 
-                return CreatedAtRoute("GetDelivery", new { id= delivery.Id }, delivery);
+                return CreatedAtRoute("GetDelivery", new { id = delivery.Id }, delivery);
             }
             catch (DuplicateResourceException)
             {
@@ -149,7 +149,7 @@ namespace Fabrikam.DroneDelivery.DeliveryService.Controllers
                                            delivery.Expedited,
                                            delivery.ConfirmationRequired,
                                            delivery.DroneId);
-            
+
             // Adds the delivery rescheduled status event
             var deliveryTrackingEvent = new DeliveryTrackingEvent { DeliveryId = id, Stage = DeliveryStage.Rescheduled };
             await deliveryTrackingRepository.AddAsync(deliveryTrackingEvent);
@@ -183,8 +183,7 @@ namespace Fabrikam.DroneDelivery.DeliveryService.Controllers
         }
 
         // POST api/deliveries/5/notifymerequests
-        [Route("/api/[controller]/{id}/notifymerequests")]
-        [HttpPost]
+        [HttpPost("{id}/notifymerequests")]
         public async Task<IActionResult> NotifyMe(string id, [FromBody]NotifyMeRequest notifyMeRequest)
         {
             logger.LogInformation("In NotifyMe action with id: {Id} and notifyMeRequest: {@NotifyMeRequest}", id, notifyMeRequest.ToLogInfo());
@@ -218,8 +217,7 @@ namespace Fabrikam.DroneDelivery.DeliveryService.Controllers
         /// <param name="confirmation"></param>
         /// <returns></returns>
         // POST api/deliveries/5/confirmations
-        [Route("/api/[controller]/{id}/confirmations")]
-        [HttpPost]
+        [HttpPost("{id}/confirmations")]
         public async Task<IActionResult> Confirm(string id, [FromBody]Confirmation confirmation)
         {
             logger.LogInformation("In Confirm action with id: {Id} and confirmation: {@Confirmation}", id, confirmation.ToLogInfo());
@@ -249,11 +247,12 @@ namespace Fabrikam.DroneDelivery.DeliveryService.Controllers
             };
 
             // Adds the delivery complete status event
-            await deliveryTrackingRepository.AddAsync(new DeliveryTrackingEvent
-                                                            {
-                                                                DeliveryId = id,
-                                                                Stage = DeliveryStage.Completed
-                                                            });
+            await deliveryTrackingRepository.AddAsync(
+                new DeliveryTrackingEvent
+                {
+                    DeliveryId = id,
+                    Stage = DeliveryStage.Completed
+                });
 
             // sends notifications
             var notifyMeRequests = await notifyMeRequestRepository.GetAllByDeliveryIdAsync(id);
@@ -265,6 +264,19 @@ namespace Fabrikam.DroneDelivery.DeliveryService.Controllers
             await deliveryRepository.DeleteAsync(id, confirmedDelivery);
 
             return Ok();
+        }
+
+        [HttpGet("summary")]
+        [ProducesResponseType(typeof(DeliveriesSummary), StatusCodes.Status200OK)]
+        public async Task<IActionResult> GetSummary([FromQuery] string ownerId, [FromQuery] int year, [FromQuery] int month)
+        {
+            var deliveryCount = await deliveryRepository.GetDeliveryCountAsync(ownerId, year, month);
+
+            return Ok(
+                new DeliveriesSummary
+                {
+                    Count = deliveryCount
+                });
         }
     }
 }

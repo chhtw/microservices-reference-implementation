@@ -6,10 +6,11 @@
 ###################################################################################################
 # Workflow
 ###################################################################################################
-apiVersion: apps/v1beta2
+{{- $fullname := include "workflow.fullname" . | replace "." "" }}
+apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "workflow.fullname" . | replace "." "" }}
+  name: {{ $fullname  }}
   labels:
     app.kubernetes.io/name: {{ include "workflow.name" . }}
     app.kubernetes.io/instance: {{ .Release.Name }}
@@ -18,7 +19,7 @@ metadata:
     app.kubernetes.io/component: backend
     app.kubernetes.io/part-of: dronedelivery
     helm.sh/chart: {{ include "workflow.chart" . }}
-    aadpodidbinding: workflow
+    aadpodidbinding: {{ $fullname  }}
   annotations:
     kubernetes.io/change-cause: {{ .Values.reason }}
 spec:
@@ -37,14 +38,58 @@ spec:
         app.kubernetes.io/component: backend
         app.kubernetes.io/part-of: dronedelivery
         helm.sh/chart: {{ include "workflow.chart" . }}
-        aadpodidbinding: workflow
+        aadpodidbinding: {{ $fullname  }}
+{{ toYaml .Values.workflow.customPodLabels | indent 8 }}
     spec:
       securityContext:
         fsGroup: 1
       containers:
       - name: fabrikam-workflow
-        image: {{ .Values.dockerregistry }}/{{ .Values.image.repository }}:{{ .Values.image.tag }}
+        image: {{ .Values.dockerregistry }}{{ .Values.dockerregistrynamespace }}/{{ .Values.image.repository }}:{{ .Values.image.tag }}
         imagePullPolicy: {{ .Values.image.pullPolicy }}
+        readinessProbe:
+          exec:
+            command:
+{{- range .Values.readinessProbe.exec.command }}
+            - {{ . | quote }}
+{{- end }}
+{{- if .Values.readinessProbe.initialDelaySeconds }}
+          initialDelaySeconds: {{ .Values.readinessProbe.initialDelaySeconds }}
+{{- end }}
+{{- if .Values.readinessProbe.periodSeconds }}
+          periodSeconds: {{ .Values.readinessProbe.periodSeconds }}
+{{- end }}
+{{- if .Values.readinessProbe.timeoutSeconds }}
+          timeoutSeconds: {{ .Values.readinessProbe.timeoutSeconds }}
+{{- end }}
+{{- if .Values.readinessProbe.failureThreshold }}
+          failureThreshold: {{ .Values.readinessProbe.failureThreshold }}
+{{- end }}
+        livenessProbe:
+          exec:
+            command:
+{{- range .Values.livenessProbe.exec.command }}
+            - {{ . | quote }}
+{{- end }}
+{{- if .Values.livenessProbe.initialDelaySeconds }}
+          initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds }}
+{{- end }}
+{{- if .Values.livenessProbe.periodSeconds }}
+          periodSeconds: {{ .Values.livenessProbe.periodSeconds }}
+{{- end }}
+{{- if .Values.livenessProbe.timeoutSeconds }}
+          timeoutSeconds: {{ .Values.livenessProbe.timeoutSeconds }}
+{{- end }}
+{{- if .Values.livenessProbe.failureThreshold }}
+          failureThreshold: {{ .Values.livenessProbe.failureThreshold }}
+{{- end }}
+        resources:
+          requests:
+            cpu:   {{ required "A valid .Values.resources.requests.cpu entry required!" .Values.resources.requests.cpu }}
+            memory: {{ required "A valid .Values.resources.requests.memory entry required!" .Values.resources.requests.memory }}
+          limits:
+            cpu:   {{ required "A valid .Values.resources.limits.cpu entry required!" .Values.resources.limits.cpu }}
+            memory: {{ required "A valid .Values.resources.limits.memory entry required!" .Values.resources.limits.memory }}
         volumeMounts:
         - name: workflow
           mountPath: /kvmnt
@@ -52,6 +97,8 @@ spec:
         env:
         - name: CONFIGURATION_FOLDER
           value: /kvmnt
+        - name: HEALTHCHECK_INITIAL_DELAY
+          value: {{ default "30000" .Values.healthcheck.delay | quote }}
         - name: SERVICE_URI_DELIVERY
           value: {{ .Values.serviceuri.delivery }}
         - name: SERVICE_URI_DRONE

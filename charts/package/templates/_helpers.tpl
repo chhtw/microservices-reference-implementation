@@ -7,6 +7,14 @@ Expand the name of the chart.
 {{- end -}}
 
 {{/*
+Create app name with version.
+*/}}
+{{- define "package.versionappname" -}}
+{{- $name := default .Chart.Name .Values.nameOverride -}}
+{{- printf "%s-%s" $name .Chart.AppVersion | replace "+" "_" | trunc 63 | trimSuffix "-" -}}
+{{- end -}}
+
+{{/*
 Create a default fully qualified app name.
 We truncate at 63 chars because some Kubernetes name fields are limited to this (by the DNS naming spec).
 If release name contains chart name it will be used as a full name.
@@ -29,4 +37,24 @@ Create chart name and version as used by the chart label.
 */}}
 {{- define "package.chart" -}}
 {{- printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" -}}
+{{- end -}}
+
+{{/*
+Common labels
+*/}}
+{{- define "package.labels" -}}
+helm.sh/chart: {{ include "package.chart" . }}
+{{ include "package.selectorLabels" . }}
+{{- if .Chart.AppVersion }}
+app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
+{{- end }}
+app.kubernetes.io/managed-by: {{ .Release.Service }}
+{{- end -}}
+
+{{/*
+Selector labels
+*/}}
+{{- define "package.selectorLabels" -}}
+app.kubernetes.io/name: {{ include "package.name" . }}
+app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end -}}
